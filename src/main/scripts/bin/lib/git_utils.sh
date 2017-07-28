@@ -108,12 +108,38 @@ function git.clone() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} [-g] DIR_WORK_ROOT [DIR_GROUP] CLONE_URL"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
+  # グローバルコンフィグ使用有無
+  local _is_use_global_config=false
+
+  # オプション解析
+  while :; do
+    case $1 in
+      -g|--use-global-config)
+        _is_use_global_config=true
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        log.error_console "${_USAGE}"
+        log.remove_indent
+        return ${EXITCODE_ERROR}
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
   # 引数の数
   if [ $# -lt 2 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} DIR_WORK_ROOT [DIR_GROUP] CLONE_URL"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -220,31 +246,34 @@ function git.clone() {
   done
   log.remove_indent
 
-
   # plugin実行
-  export PATH_LOG
-  log.debug_console "find ${_trg_dir} -maxdepth 1 -follow -type f -name \*.sh | sort"
-  log.add_indent
-  for _cur_file_path in `find ${_trg_dir} -maxdepth 1 -follow -type f -name \*.sh | sort`; do
-    local _cur_file_name=`basename ${_cur_file_path}`
-    local _cur_file_relpath=`echo ${_cur_file_path} | sed -e "s|${DIR_PLUGIN}/||"`
+  if [ "${_is_use_global_config}" != "true" ]; then
+    # global config を使用しない場合 ※ リポジトリ毎に config を設定
 
-    # plugin実行
-    log.debug_console "${_cur_file_path} ${_work_dir}"
+    export PATH_LOG
+    log.debug_console "find ${_trg_dir} -maxdepth 1 -follow -type f -name \*.sh | sort"
     log.add_indent
-    ${_cur_file_path} "${_work_dir}"
-    _ret_code=$?
-    log.remove_indent
+    for _cur_file_path in `find ${_trg_dir} -maxdepth 1 -follow -type f -name \*.sh | sort`; do
+      local _cur_file_name=`basename ${_cur_file_path}`
+      local _cur_file_relpath=`echo ${_cur_file_path} | sed -e "s|${DIR_PLUGIN}/||"`
 
-    # 戻り値を確認
-    if [ ${_ret_code} -eq ${EXITCODE_ERROR} ]; then
-      log.error_console "${_cur_file_relpath} でエラーが発生しました。リターンコード：${_ret_code}"
+      # plugin実行
+      log.debug_console "${_cur_file_path} ${_work_dir}"
+      log.add_indent
+      ${_cur_file_path} "${_work_dir}"
+      _ret_code=$?
       log.remove_indent
-      log.remove_indent
-      return ${EXITCODE_ERROR}
-    fi
 
-  done
+      # 戻り値を確認
+      if [ ${_ret_code} -eq ${EXITCODE_ERROR} ]; then
+        log.error_console "${_cur_file_relpath} でエラーが発生しました。リターンコード：${_ret_code}"
+        log.remove_indent
+        log.remove_indent
+        return ${EXITCODE_ERROR}
+      fi
+
+    done
+  fi
   log.remove_indent
 
   #------------------------------------------------------------------------------------------------
@@ -282,12 +311,13 @@ function git.fecth() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR [TARGET_BRANCH]"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -lt 1 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR [TARGET_BRANCH]"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -316,8 +346,8 @@ function git.fecth() {
   # フェッチ
   log.debug_console "git fetch --prune origin ${_branch}"
   log.add_indent
-  git fetch --prune origin ${_branch}                                                         2>&1 |
-  log.debug_console
+  git fetch --prune origin ${_branch}                                                         2>&1 | #
+  log.debug_console                                                                                  # stdout, stderr どちらもログ表示
   _ret_code=${PIPESTATUS[0]}
   log.remove_indent
 
@@ -328,9 +358,9 @@ function git.fecth() {
     sleep 1
     log.debug_console "[RETRY] git fetch --prune origin ${_branch}"
     log.add_indent
-    git fetch --prune origin ${_branch}                                                       2>&1 |
-    log.debug_console
-    _ret_code=${PIPESTATUS[0]}
+    git fetch --prune origin ${_branch}                                                       2>&1 | #
+    log.debug_console                                                                                # stdout, stderr どちらもログ表示
+    _ret_code=${PIPESTATUS[0]}                                                                       # パイプの1つめの戻り値を取得
     log.remove_indent
 
     # 実行結果チェック
@@ -387,7 +417,7 @@ function git.fecth() {
     log.add_indent
     git fetch origin ${_target_local_branch}                                                  2>&1 |
     log.debug_console
-    _ret_code=${PIPESTATUS[0]}
+    _ret_code=${PIPESTATUS[0]}                                                                       # パイプの1つめの戻り値を取得
     log.remove_indent
 
     # 実行結果チェック
@@ -400,7 +430,7 @@ function git.fecth() {
       log.add_indent
       git fetch origin ${_target_local_branch}                                                2>&1 |
       log.debug_console
-      _ret_code=${PIPESTATUS[0]}
+      _ret_code=${PIPESTATUS[0]}                                                                     # パイプの1つめの戻り値を取得
       log.remove_indent
 
       # 実行結果チェック
@@ -443,12 +473,13 @@ function git.local.reset_only() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 1 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -526,12 +557,13 @@ function git.reset() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 1 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -562,12 +594,20 @@ function git.reset() {
     return ${EXITCODE_ERROR}
   fi
 
-  # 作業ディレクトリを最新化
-  git.pull "${_work_dir}"
+  # リモートリポジトリ存在チェック
+  git remote | grep 'origin'                                                                         > /dev/null 2>&1
   _ret_code=$?
-  if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
-    log.remove_indent
-    return ${EXITCODE_ERROR}
+  if [ ${_ret_code} -eq ${EXITCODE_SUCCESS} ]; then
+    # リモートリポジトリが存在する場合
+
+    # 作業ディレクトリを最新化
+    git.pull "${_work_dir}"
+    _ret_code=$?
+    if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
+      log.remove_indent
+      return ${EXITCODE_ERROR}
+    fi
+
   fi
 
   #------------------------------------------------------------------------------------------------
@@ -603,12 +643,13 @@ function git.switch() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR TARGET_BRANCH"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 2 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR TARGET_BRANCH"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -646,7 +687,8 @@ function git.switch() {
   local _get_result=
   log.debug_console "git branch -a | grep ${_branch}"
   log.add_indent
-  _get_result=`git branch -a | grep ${_branch}`
+  _get_result=`git branch -a                                                                  2>&1 | #
+               grep ${_branch}`                                                                      # 対象のブランチに絞る
   _ret_code=${PIPESTATUS[0]}
   echo "${_get_result}"                                                                            |
   log.debug_console
@@ -714,12 +756,13 @@ function git.pull() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 1 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -814,12 +857,13 @@ function git.pull_rebase() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 1 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -914,12 +958,13 @@ function git.status() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -lt 1 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -995,12 +1040,13 @@ function git.staging() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR [TARGET_PATH1 ...]"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -lt 1 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR [ TARGET_PATH1 ... ]"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -1040,7 +1086,7 @@ function git.staging() {
     log.add_indent
     git add -A                                                                                2>&1 |
     log.debug_console
-    _ret_code=${PIPESTATUS[0]}
+    _ret_code=${PIPESTATUS[0]}                                                                       # パイプの1つめの戻り値を取得
     log.remove_indent
 
     # 実行結果チェック
@@ -1071,7 +1117,7 @@ function git.staging() {
         log.remove_indent
       fi
 
-      _ret_code=${PIPESTATUS[0]}
+      _ret_code=${PIPESTATUS[0]}                                                                     # パイプの1つめの戻り値を取得
 
       # 実行結果チェック
       if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
@@ -1120,12 +1166,13 @@ function git.staging_clear() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR [TARGET_PATH1 ...]"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -lt 1 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR [ TARGET_PATH1 ... ]"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -1209,12 +1256,13 @@ function git.commit() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR COMMIT_COMMENT"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 2 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR COMMIT_COMMENT"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -1289,12 +1337,13 @@ function git.staging_and_commit() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR COMMIT_COMMENT"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 2 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR COMMIT_MESSAGE"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -1378,10 +1427,10 @@ function git.revert() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} [-m|-m2] GIT_WORK_DIR COMMIT_HASH"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
-  local _usage="Usage: ${FUNCNAME[0]} [-m|-m2] GIT_WORK_DIR COMMIT_HASH"
   local _is_merge_commmit=false
   local _is_merge_commmit2=false
 
@@ -1401,7 +1450,7 @@ function git.revert() {
         break
         ;;
       -*)
-        log.error_console "${_usage}"
+        log.error_console "${_USAGE}"
         log.remove_indent
         return ${EXITCODE_ERROR}
         ;;
@@ -1413,7 +1462,7 @@ function git.revert() {
 
   # 引数の数
   if [ $# -ne 2 ]; then
-    log.error_console "${_usage}"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -1516,12 +1565,13 @@ function git.push() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR [TARGET_BRANCH]"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -lt 1 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR [TARGET_BRANCH]"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -1641,12 +1691,13 @@ function git.staging_and_push() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR [TARGET_BRANCH]"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -lt 1 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR [TARGET_BRANCH]"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -1713,6 +1764,13 @@ function git.staging_and_push() {
 #   ・2: Fromタグ
 #   ・3: Toタグ
 #
+# オプション
+#   --merges: マージコミットのみ出力オプション
+#       マージコミットのみ差分出力します。
+#
+#   --no-merges: マージコミット除外オプション
+#       マージコミットを除外して差分出力します。
+#
 # 戻り値
 #    0: 差分コミット一覧を取得できた場合
 #    3: 差分コミット一覧が0件の場合
@@ -1727,12 +1785,49 @@ function git.diff_commit_list() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} [--merges|--no-merges] GIT_WORK_DIR FROM_TAG TO_TAG"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
+  local _option_merges=""
+
+  while :; do
+    case $1 in
+      --merges)
+        if [ "${_option_merges}" != "" ]; then
+          log.error_log "--merges | --no-merges が両方指定されています。どちらか一方のみ指定して下さい。"
+          return ${EXITCODE_ERROR}
+        fi
+        _option_merges=$1
+        shift
+        break
+        ;;
+      --no-merges)
+        if [ "${_option_merges}" != "" ]; then
+          log.error_log "--merges | --no-merges が両方指定されています。どちらか一方のみ指定して下さい。"
+          return ${EXITCODE_ERROR}
+        fi
+        _option_merges=$1
+        shift
+        break
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        log.error_console "${_USAGE}"
+        exit ${EXITCODE_ERROR}
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
   # 引数の数
   if [ $# -ne 3 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_TAG TO_TAG"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -1771,9 +1866,10 @@ function git.diff_commit_list() {
   cd "${_work_dir}"
 
   # 差分コミット一覧取得
-  log.debug_console "git log --date=iso --pretty=format:'%cd,%H,%ce,%s' ${_tag_from}..${_tag_to}"
+  log.debug_console "git log ${_option_merges} --date=iso --pretty=format:'%cd,%H,%ce,%s' ${_tag_from}..${_tag_to}"
   log.add_indent
-  git log --date=iso --pretty=format:'%cd,%H,%ce,%s' ${_tag_from}..${_tag_to}                        > ${_file_commit_list}
+  git log ${_option_merges} --date=iso --pretty=format:'%cd,%H,%ce,%s' ${_tag_from}..${_tag_to}    |
+  tee                                                                                                > ${_file_commit_list}
   _ret_code=${PIPESTATUS[0]}
   log.remove_indent
 
@@ -1826,6 +1922,12 @@ function git.diff_commit_list() {
 #   -v: 詳細表示オプション
 #       Fromタグ・Toタグ間に含まれる各コミットごとの差分ファイル一覧を取得します。
 #
+#   --merges: マージコミットのみ出力オプション
+#       マージコミットのみ差分出力します。
+#
+#   --no-merges: マージコミット除外オプション
+#       マージコミットを除外して差分出力します。
+#
 # 戻り値
 #    git.diff_file_list を参照
 #
@@ -1835,7 +1937,7 @@ function git.commit_diff_file_list() {
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
-  git.diff_file_list "$1" "$2" "$3" "commit"
+  git.diff_file_list "$@" "commit"
   local _ret_code=$?
 
   log.remove_indent
@@ -1855,6 +1957,12 @@ function git.commit_diff_file_list() {
 #   -v: 詳細表示オプション
 #       Fromタグ・Toタグ間に含まれる各コミットごとの差分ファイル一覧を取得します。
 #
+#   --merges: マージコミットのみ出力オプション
+#       マージコミットのみ差分出力します。
+#
+#   --no-merges: マージコミット除外オプション
+#       マージコミットを除外して差分出力します。
+#
 # 戻り値
 #    git.diff_file_list を参照
 #
@@ -1864,7 +1972,7 @@ function git.status_diff_file_list() {
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
-  git.diff_file_list "$1" "dummy" "dummy" "status"
+  git.diff_file_list "$@" "dummy" "dummy" "status"
   local _ret_code=$?
 
   log.remove_indent
@@ -1892,6 +2000,12 @@ function git.status_diff_file_list() {
 #   -v: 詳細表示オプション
 #       Fromタグ・Toタグ間に含まれる各コミットごとの差分ファイル一覧を取得します。
 #
+#   --merges: マージコミットのみ出力オプション
+#       マージコミットのみ差分出力します。
+#
+#   --no-merges: マージコミット除外オプション
+#       マージコミットを除外して差分出力します。
+#
 # 戻り値
 #    0: 差分ファイル一覧を取得できた場合
 #    3: 差分ファイル一覧が0件の場合
@@ -1901,7 +2015,7 @@ function git.status_diff_file_list() {
 #   ・レイアウト-commitモード
 #     コミット日時,ハッシュ,ユーザ,コメント,更新タイプ,ファイルパス
 #
-#   ・レイアウト-stutsモード
+#   ・レイアウト-stautsモード
 #     -,-,-,-,更新タイプ,ファイルパス
 #
 #--------------------------------------------------------------------------------------------------
@@ -1909,11 +2023,12 @@ function git.diff_file_list() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} [-v] GIT_WORK_DIR FROM_TAG TO_TAG MODE"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
-  local _usage="Usage: ${FUNCNAME[0]} [-v] GIT_WORK_DIR FROM_TAG TO_TAG MODE"
   local _is_detail=false
+  local _option_merges=""
 
   # オプション解析
   while :; do
@@ -1922,12 +2037,30 @@ function git.diff_file_list() {
         _is_detail=true
         shift
         ;;
+      --merges)
+        if [ "${_option_merges}" != "" ]; then
+          log.error_log "--merges | --no-merges が両方指定されています。どちらか一方のみ指定して下さい。"
+          return ${EXITCODE_ERROR}
+        fi
+        _option_merges=$1
+        shift
+        break
+        ;;
+      --no-merges)
+        if [ "${_option_merges}" != "" ]; then
+          log.error_log "--merges | --no-merges が両方指定されています。どちらか一方のみ指定して下さい。"
+          return ${EXITCODE_ERROR}
+        fi
+        _option_merges=$1
+        shift
+        break
+        ;;
       --)
         shift
         break
         ;;
       -*)
-        log.error_console "${_usage}"
+        log.error_console "${_USAGE}"
         log.remove_indent
         return ${EXITCODE_ERROR}
         ;;
@@ -1939,7 +2072,7 @@ function git.diff_file_list() {
 
   # 引数の数
   if [ $# -ne 4 ]; then
-    log.error_console "${_usage}"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -2006,21 +2139,21 @@ function git.diff_file_list() {
   if [ "${_mode}" = "commit" ]; then
     # コミットモードの場合
 
-    # ローカルリポジトリの最新化
+    # Git作業ディレクトリの最新化
     git.reset ${_work_dir} >> ${PATH_LOG} 2>&1
     _ret_code=${PIPESTATUS[0]}
 
     # 実行結果チェック
     if [ ${_ret_code} -eq ${EXITCODE_WARN} ]; then
       # エラーの場合
-      log.error_console "ローカルリポジトリの最新化に失敗しました。Git作業ディレクトリ：${_work_dir}、リターンコード：${_ret_code}"
+      log.error_console "Git作業ディレクトリの最新化に失敗しました。Git作業ディレクトリ：${_work_dir}、リターンコード：${_ret_code}"
       rm -rf ${_dir_tmp}
       log.remove_indent
       return ${EXITCODE_ERROR}
     fi
 
     # 差分コミット一覧取得
-    git.diff_commit_list ${_work_dir} ${_tag_from} ${_tag_to}                                        > ${_file_commit_list}
+    git.diff_commit_list ${_option_merges} ${_work_dir} ${_tag_from} ${_tag_to}                      > ${_file_commit_list}
     _ret_code=$?
 
     # 取得結果チェック
@@ -2072,8 +2205,9 @@ function git.diff_file_list() {
       local _cur_file_filelist=${_dir_tmp}/${_cur_filename_filelist}
 
       log.debug_console "git log --name-status ${_cur_commit_hash} -1"
-      git log --name-status ${_cur_commit_hash} -1                                                   > ${_cur_file_filelist}
-      _ret_code=${PIPESTATUS[0]}
+      git log --name-status ${_cur_commit_hash} -1                                                 |
+      tee                                                                                            > ${_cur_file_filelist}
+      _ret_code=${PIPESTATUS[0]}                                                                     # パイプの1つめの戻り値を取得
 
       # 取得結果チェック
       if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
@@ -2145,7 +2279,7 @@ function git.diff_file_list() {
     log.debug_console "git status -s -uall"
     git status -s -uall                                                                            |
     tee                                                                                              > ${_file_filelist}
-    _ret_code=${PIPESTATUS[0]}
+    _ret_code=${PIPESTATUS[0]}                                                                       # パイプの1つめの戻り値を取得
 
     # 取得結果チェック
     if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
@@ -2244,6 +2378,12 @@ function git.diff_file_list() {
 #   -v: 詳細表示オプション
 #       Fromタグ・Toタグ間に含まれる各コミットごとの差分ファイル一覧を取得します。
 #
+#   --merges: マージコミットのみ出力オプション
+#       マージコミットのみ差分出力します。
+#
+#   --no-merges: マージコミット除外オプション
+#       マージコミットを除外して差分出力します。
+#
 # 戻り値
 #    git.diff_file_list を参照
 #
@@ -2253,7 +2393,7 @@ function git.commit_diff_file_details() {
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
-  git.diff_file_details "$1" "$2" "$3" "commit"
+  git.diff_file_details "$@" "commit"
   local _ret_code=$?
 
   log.remove_indent
@@ -2274,6 +2414,12 @@ function git.commit_diff_file_details() {
 #   -v: 詳細表示オプション
 #       Fromタグ・Toタグ間に含まれる各コミットごとの差分ファイル一覧を取得します。
 #
+#   --merges: マージコミットのみ出力オプション
+#       マージコミットのみ差分出力します。
+#
+#   --no-merges: マージコミット除外オプション
+#       マージコミットを除外して差分出力します。
+#
 # 戻り値
 #    git.diff_file_list を参照
 #
@@ -2283,7 +2429,7 @@ function git.status_diff_file_details() {
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
-  git.diff_file_details "$1" "HEAD" "WORK" "status"
+  git.diff_file_details "$@" "HEAD" "WORK" "status"
   local _ret_code=$?
 
   log.remove_indent
@@ -2311,6 +2457,12 @@ function git.status_diff_file_details() {
 #   -v: 詳細表示オプション
 #       Fromタグ・Toタグ間に含まれる各コミットごとの差分ファイル詳細を取得します。
 #
+#   --merges: マージコミットのみ出力オプション
+#       マージコミットのみ差分出力します。
+#
+#   --no-merges: マージコミット除外オプション
+#       マージコミットを除外して差分出力します。
+#
 # 戻り値
 #    0: 差分ファイル詳細を取得できた場合
 #    3: 差分ファイル詳細に出力する内容が無い場合
@@ -2321,11 +2473,12 @@ function git.diff_file_details() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} [-v] GIT_WORK_DIR FROM_TAG TO_TAG MODE"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
-  local _usage="Usage: ${FUNCNAME[0]} [-v] GIT_WORK_DIR FROM_TAG TO_TAG MODE"
   local _is_detail=false
+  local _option_merges=""
 
   # オプション解析
   while :; do
@@ -2334,12 +2487,30 @@ function git.diff_file_details() {
         _is_detail=true
         shift
         ;;
+      --merges)
+        if [ "${_option_merges}" != "" ]; then
+          log.error_log "--merges | --no-merges が両方指定されています。どちらか一方のみ指定して下さい。"
+          return ${EXITCODE_ERROR}
+        fi
+        _option_merges=$1
+        shift
+        break
+        ;;
+      --no-merges)
+        if [ "${_option_merges}" != "" ]; then
+          log.error_log "--merges | --no-merges が両方指定されています。どちらか一方のみ指定して下さい。"
+          return ${EXITCODE_ERROR}
+        fi
+        _option_merges=$1
+        shift
+        break
+        ;;
       --)
         shift
         break
         ;;
       -*)
-        log.error_console "${_usage}"
+        log.error_console "${_USAGE}"
         log.remove_indent
         return ${EXITCODE_ERROR}
         ;;
@@ -2351,7 +2522,7 @@ function git.diff_file_details() {
 
   # 引数の数
   if [ $# -ne 4 ]; then
-    log.error_console "${_usage}"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -2420,10 +2591,10 @@ function git.diff_file_details() {
   # 差分ファイル一覧取得
   if [ "${_is_detail}" != "true" ]; then
     # From・To差分の場合
-    git.diff_file_list ${_work_dir} ${_tag_from} ${_tag_to} ${_mode}                                 > ${_file_file_list}
+    git.diff_file_list ${_option_merges} ${_work_dir} ${_tag_from} ${_tag_to} ${_mode}               > ${_file_file_list}
   else
     # 詳細表示の場合
-    git.diff_file_list -v ${_work_dir} ${_tag_from} ${_tag_to} ${_mode}                              > ${_file_file_list}
+    git.diff_file_list -v ${_option_merges} ${_work_dir} ${_tag_from} ${_tag_to} ${_mode}            > ${_file_file_list}
   fi
 
   _ret_code=$?
@@ -2520,7 +2691,7 @@ function git.diff_file_details() {
 
         log.debug_console "git show ${_cur_commit_hash}"
         git show ${_cur_commit_hash}                                                                 > ${_cur_file_flat}
-        _ret_code=${PIPESTATUS[0]}
+        _ret_code=${PIPESTATUS[0]}                                                                   # パイプの1つめの戻り値を取得
 
         # 実行結果チェック
         if [ ${_ret_code} -eq ${EXITCODE_WARN} ]; then
@@ -2601,7 +2772,7 @@ function git.diff_file_details() {
             log.debug_console "git checkout ${_tag_old} ${_cur_file_path}"
             log.add_indent
             git checkout ${_tag_old} ${_cur_file_path}                                        2>&1 |
-            log.debug_log
+            log.debug_console
             _ret_code=${PIPESTATUS[0]}
             log.remove_indent
 
@@ -2662,7 +2833,7 @@ function git.diff_file_details() {
           log.debug_console "git checkout ${_tag_new} ${_cur_file_path}"
           log.add_indent
           git checkout ${_tag_new} ${_cur_file_path}                                          2>&1 |
-          log.debug_log
+          log.debug_console
           _ret_code=${PIPESTATUS[0]}
           log.remove_indent
 
@@ -2738,7 +2909,7 @@ function git.diff_file_details() {
             log.debug_console "git checkout ${_tag_new} ${_cur_file_path}"
             log.add_indent
             git checkout ${_tag_old} ${_cur_file_path}                                        2>&1 |
-            log.debug_log
+            log.debug_console
             _ret_code=${PIPESTATUS[0]}
             log.remove_indent
 
@@ -2771,7 +2942,7 @@ function git.diff_file_details() {
             tee                                                                                      > ${_cur_file_diff}
           fi
 
-          _ret_code=${PIPESTATUS[0]}
+          _ret_code=${PIPESTATUS[0]}                                                                 # パイプの1つめの戻り値を取得
 
           # 実行結果チェック
           if [ ${_ret_code} -eq ${EXITCODE_WARN} ]; then
@@ -2926,12 +3097,38 @@ function git.create_repository_local() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} [-g] LOCAL_REPOSITORY_DIR_ROOT [GROUP] REPOSITORY_NAME PROJECT_PATH"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
+  # グローバルコンフィグ使用有無
+  local _is_use_global_config=false
+
+  # オプション解析
+  while :; do
+    case $1 in
+      -g|--use-global-config)
+        _is_use_global_config=true
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        log.error_console "${_USAGE}"
+        log.remove_indent
+        return ${EXITCODE_ERROR}
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
   # 引数の数
   if [ $# -lt 3 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} LOCAL_REPOSITORY_DIR_ROOT [GROUP] REPOSITORY_NAME PROJECT_PATH"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -2973,7 +3170,7 @@ function git.create_repository_local() {
     # 存在する場合
     if [ -d ${_repository_path}/.git ]; then
       # Git作業ディレクトリの場合
-      log.error_console "ローカルリポジトリ作成先パスに既にリポジトリが存在します。ローカルリポジトリ作成先パス：${_repository_path}"
+      log.error_console "ローカルリポジトリ作成先パスに、既にリポジトリが存在します。ローカルリポジトリ作成先パス：${_repository_path}"
       log.remove_indent
       return ${EXITCODE_ERROR}
     fi
@@ -3012,30 +3209,34 @@ function git.create_repository_local() {
   fi
 
   # git.clone pluginを流用して設定を追加
-  local _trg_dir=${DIR_PLUGIN}/common/git.clone
-  export PATH_LOG
-  log.debug_console "find ${_trg_dir} -maxdepth 1 -follow -type f -name \*.sh | sort"
-  log.add_indent
-  for _cur_file_path in `find ${_trg_dir} -maxdepth 1 -follow -type f -name \*.sh | sort`; do
-    local _cur_file_name=`basename ${_cur_file_path}`
-    local _cur_file_relpath=`echo ${_cur_file_path} | sed -e "s|${DIR_PLUGIN}/||"`
+  if [ "${_is_use_global_config}" != "true" ]; then
+    # global config を使用しない場合 ※ リポジトリ毎に config を設定
 
-    # plugin実行
-    log.debug_console "${_cur_file_path} ${_work_dir}"
+    local _trg_dir=${DIR_PLUGIN}/common/git.clone
+    export PATH_LOG
+    log.debug_console "find ${_trg_dir} -maxdepth 1 -follow -type f -name \*.sh | sort"
     log.add_indent
-    ${_cur_file_path} "${_repository_path}"
-    _ret_code=$?
-    log.remove_indent
+    for _cur_file_path in `find ${_trg_dir} -maxdepth 1 -follow -type f -name \*.sh | sort`; do
+      local _cur_file_name=`basename ${_cur_file_path}`
+      local _cur_file_relpath=`echo ${_cur_file_path} | sed -e "s|${DIR_PLUGIN}/||"`
 
-    # 戻り値を確認
-    if [ ${_ret_code} -eq ${EXITCODE_ERROR} ]; then
-      log.error_console "${_cur_file_relpath} でエラーが発生しました。リターンコード：${_ret_code}"
+      # plugin実行
+      log.debug_console "${_cur_file_path} ${_work_dir}"
+      log.add_indent
+      ${_cur_file_path} "${_repository_path}"
+      _ret_code=$?
       log.remove_indent
-      log.remove_indent
-      return ${EXITCODE_ERROR}
-    fi
 
-  done
+      # 戻り値を確認
+      if [ ${_ret_code} -eq ${EXITCODE_ERROR} ]; then
+        log.error_console "${_cur_file_relpath} でエラーが発生しました。リターンコード：${_ret_code}"
+        log.remove_indent
+        log.remove_indent
+        return ${EXITCODE_ERROR}
+      fi
+
+    done
+  fi
   log.remove_indent
 
   # 初期コミット用にステージング
@@ -3097,12 +3298,13 @@ function git.archive() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR TARGET OUTPUT_DIR"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 3 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR TARGET OUTPUT_DIR"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -3192,12 +3394,13 @@ function git.archive_diff() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_TAG TO_TAG OUTPUT_DIR"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 4 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_TAG TO_TAG OUTPUT_DIR"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -3290,12 +3493,13 @@ function git.branch_add() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM TO_BRANCH"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 3 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM TO_BRANCH"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -3320,6 +3524,15 @@ function git.branch_add() {
   # 本処理
   #------------------------------------------------------------------------------------------------
   local _ret_code=${EXITCODE_SUCCESS}
+
+  # 作業ディレクトリのブランチ切替え
+  git.switch ${_work_dir} ${_from}
+  _ret_code=$?
+  if [ ${_ret_code} -eq ${EXITCODE_WARN} ]; then
+    log.error_console "作業ディレクトリのブランチ切替えに失敗しました。Git作業ディレクトリ：${_work_dir}、リターンコード：${_ret_code}"
+    log.remove_indent
+    return ${EXITCODE_ERROR}
+  fi
 
   # リセット
   git.reset "${_work_dir}"
@@ -3392,12 +3605,13 @@ function git.branch_rename() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_BRANCH TO_BRANCH"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 3 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_BRANCH TO_BRANCH"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -3518,12 +3732,13 @@ function git.branch_remove() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR BRANCH"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 2 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR BRANCH"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -3633,6 +3848,10 @@ function git.branch_remove() {
 #   ・3: マージ先ブランチ
 #   ・4: コミットメッセージ ※任意
 #
+# オプション
+#   --no-push：
+#     マージコミットのリモートリポジトリへのプッシュをスキップします。
+#
 # 出力
 #   なし
 #
@@ -3648,12 +3867,37 @@ function git.branch_merge() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_BRANCH TO_BRANCH [MESSAGE]"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
+  local _is_push=true
+
+  # オプション解析
+  while :; do
+    case $1 in
+      --no-push)
+        _is_push=false
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        log.error_console "${_USAGE}"
+        log.remove_indent
+        return ${EXITCODE_ERROR}
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
   # 引数の数
   if [ $# -lt 3 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_BRANCH TO_BRANCH [MESSAGE]"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -3757,18 +4001,23 @@ function git.branch_merge() {
     return ${EXITCODE_ERROR}
   fi
 
-  # マージ結果をプッシュ
-  log.debug_console "git push origin ${_to}"
-  log.add_indent
-  git push origin "${_to}"                                                                    2>&1 |
-  log.debug_console
-  _ret_code=${PIPESTATUS[0]}
-  log.remove_indent
+  if [ "${_is_push}" = "true" ]; then
+    # プッシュする場合 ※ --no-push オプションを指定していない場合
 
-  if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
-    log.error_console "マージ先ブランチのpushに失敗しました。Git作業ディレクトリ：${_work_dir}、マージ元：${_from}、マージ先：${_to}、リターンコード：${_ret_code}"
+    # マージ結果をプッシュ
+    log.debug_console "git push origin ${_to}"
+    log.add_indent
+    git push origin "${_to}"                                                                  2>&1 |
+    log.debug_console
+    _ret_code=${PIPESTATUS[0]}
     log.remove_indent
-    return ${EXITCODE_ERROR}
+
+    if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
+      log.error_console "マージ先ブランチのpushに失敗しました。Git作業ディレクトリ：${_work_dir}、マージ元：${_from}、マージ先：${_to}、リターンコード：${_ret_code}"
+      log.remove_indent
+      return ${EXITCODE_ERROR}
+    fi
+
   fi
 
   #------------------------------------------------------------------------------------------------
@@ -3803,12 +4052,13 @@ function git.tag_add_local() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM TAG [MESSAGE]"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -lt 3 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM TAG [MESSAGE]"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -3849,6 +4099,15 @@ function git.tag_add_local() {
     return ${EXITCODE_ERROR}
   fi
 
+  # タグ追加処理前のカレントブランチを取得
+  local _before_branch=`git rev-parse --abbrev-ref HEAD`
+
+  # 作成元がブランチかチェック
+  local _is_branch="false"
+  if [ "$(git branch -a | grep ${_from})" != "" ]; then
+    _is_branch="true"
+  fi
+
   # 作成元をチェックアウト
   log.debug_console "git checkout ${_from}"
   log.add_indent
@@ -3875,6 +4134,25 @@ function git.tag_add_local() {
     log.error_console "タグの作成に失敗しました。Git作業ディレクトリ：${_work_dir}、作成元：${_from}、タグ名：${_to}、リターンコード：${_ret_code}"
     log.remove_indent
     return ${EXITCODE_ERROR}
+  fi
+
+  if [ "${_is_branch}" != "true" ]; then
+    # 作成元がブランチ以外の場合 ※ checkout時に detached HEAD (HEAD がブランチから切り離されている) 状態になっている
+
+    # タグ追加処理前のカレントブランチをチェックアウト
+    log.debug_console "git checkout ${_before_branch}"
+    log.add_indent
+    git checkout "${_before_branch}"                                                          2>&1 |
+    log.debug_console
+    _ret_code=${PIPESTATUS[0]}
+    log.remove_indent
+
+    if [ ${_ret_code} -ne ${EXITCODE_SUCCESS} ]; then
+      log.error_console "detached HEAD状態の解消でエラーが発生しました。リターンコード：${_ret_code}"
+      log.remove_indent
+      return ${EXITCODE_ERROR}
+    fi
+
   fi
 
   #------------------------------------------------------------------------------------------------
@@ -3909,12 +4187,13 @@ function git.tag_add() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM TAG [MESSAGE]"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -lt 3 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM TAG [MESSAGE]"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -3943,20 +4222,20 @@ function git.tag_add() {
   #------------------------------------------------------------------------------------------------
   local _ret_code=${EXITCODE_SUCCESS}
 
-  # ローカルリポジトリのブランチ切替え
+  # 作業ディレクトリのブランチ切替え
   git.switch ${_work_dir} ${_from}
   _ret_code=$?
   if [ ${_ret_code} -eq ${EXITCODE_WARN} ]; then
-    log.error_console "ローカルリポジトリのブランチ切替えに失敗しました。Git作業ディレクトリ：${_work_dir}、リターンコード：${_ret_code}"
+    log.error_console "作業ディレクトリのブランチ切替えに失敗しました。Git作業ディレクトリ：${_work_dir}、リターンコード：${_ret_code}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
 
-  # ローカルリポジトリの最新化
+  # Git作業ディレクトリの最新化
   git.reset ${_work_dir}
   _ret_code=$?
   if [ ${_ret_code} -eq ${EXITCODE_WARN} ]; then
-    log.error_console "ローカルリポジトリの最新化に失敗しました。Git作業ディレクトリ：${_work_dir}、リターンコード：${_ret_code}"
+    log.error_console "Git作業ディレクトリの最新化に失敗しました。Git作業ディレクトリ：${_work_dir}、リターンコード：${_ret_code}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -4019,12 +4298,13 @@ function git.tag_rename_local() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_TAG TO_TAG"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 3 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_TAG TO_TAG"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -4122,12 +4402,13 @@ function git.tag_rename() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_TAG TO_TAG"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 3 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR FROM_TAG TO_TAG"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -4223,12 +4504,13 @@ function git.tag_remove_local() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR TAG"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 2 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR TAG"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -4307,12 +4589,13 @@ function git.tag_remove() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR TAG"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 2 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR TAG"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -4396,12 +4679,13 @@ function git.is_exist_tag() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} GIT_WORK_DIR TAG"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 2 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} GIT_WORK_DIR TAG"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi
@@ -4470,12 +4754,13 @@ function git.housekeep_local_repository() {
   #------------------------------------------------------------------------------------------------
   # 事前処理
   #------------------------------------------------------------------------------------------------
+  local _USAGE="Usage: ${FUNCNAME[0]} HOUSEKEEP_GIT_WORK_DIR MAX_TAG_COUNT"
   log.debug_console "${FUNCNAME[0]} $@"
   log.add_indent
 
   # 引数の数
   if [ $# -ne 2 ]; then
-    log.error_console "Usage: ${FUNCNAME[0]} HOUSEKEEP_GIT_WORK_DIR MAX_TAG_COUNT"
+    log.error_console "${_USAGE}"
     log.remove_indent
     return ${EXITCODE_ERROR}
   fi

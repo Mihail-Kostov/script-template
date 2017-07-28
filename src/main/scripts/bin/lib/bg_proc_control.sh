@@ -438,6 +438,8 @@ function bg_proc_control.init() {
     return ${EXITCODE_ERROR}
   fi
 
+  log.debug_console "バックグラウンドプロセスの実行状況は $(bg_proc_control.local.get_log_dir ${_group}) で確認できます。"
+
   # logディレクトリ作成
   log.trace_console "mkdir -p $(bg_proc_control.local.get_log_dir ${_group})"
   mkdir -p $(bg_proc_control.local.get_log_dir ${_group})
