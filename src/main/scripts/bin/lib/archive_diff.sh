@@ -141,7 +141,7 @@ function recursive_expand() {
   # 対応拡張子群をループ
   for cur_allow_ext in ${ALLOW_EXTS[@]}; do
     # 現在の対応拡張子のファイルをループ
-    for cur_file_path in $(find ${dir_out_tmp} -name \*.${cur_allow_ext} ); do
+    for cur_file_path in $(find ${dir_out_tmp} -type f -name \*.${cur_allow_ext} ); do
       # 再帰呼び出し
       recursive_expand "${cur_file_path}"
       _ret_code=$?
